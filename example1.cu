@@ -92,13 +92,18 @@ int main(int argc, char** argv)
     //initialize host variables
     int n_ = atoi(argv[1]);
     cudaMemcpyToSymbol(n,&n_,sizeof(n_));
-    int rounded_n = n;
-    if(n % 32 != 0){
-        rounded_n = 32*(n/32 + 1);
+    int rounded_n = n_;
+    if(n_ % 32 != 0){
+        rounded_n = 32*(n_/32 + 1);
     }
-    vector<double> A(rounded_n * rounded_n,0);
-    for(size_t i = 0; i < n; ++i){
-        for(size_t j=0;j<n;++j){
+    //vector<double> Az(rounded_n * rounded_n,0);
+    double *A = new double[rounded_n*rounded_n];
+    for(size_t i = 0; i < rounded_n; ++i){
+        for(size_t j=0;j<rounded_n;++j){
+            if(i >= n_ || j >= n_){
+                A[i*rounded_n + j] = 0;
+                continue;
+            }
             A[i*rounded_n + j] = sin(i*i+j)*sin(i*i+j)+cos(i-j);
         }
     }
@@ -135,10 +140,10 @@ int main(int argc, char** argv)
 
     //note that we provided d_a directly but had to provide &a, this is because
     //cudaMemcpy expects pointers
-    if(cudaMemcpy(d_Aold,A.data(),sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
+    if(cudaMemcpy(d_Aold,A,sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
         cout<<"Could not copy A into d_Aold"<<endl;
     }
-    if(cudaMemcpy(d_Anew,A.data(),sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
+    if(cudaMemcpy(d_Anew,A,sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
         cout<<"Could not copy A into d_Anew"<<endl;
     }
     for(int i = 0; i < 10; ++i){
@@ -157,13 +162,14 @@ int main(int argc, char** argv)
     //because the CPU can continue executing after the kernel is launched. This behavior could be
     //prevented by using a call to cudaDeviceSynchronize()
     //note that destination is first in the cudaMemcpy call
-    if(cudaMemcpy(A.data(),d_Anew,sizeof(int),cudaMemcpyDeviceToHost) != cudaSuccess){
+    if(cudaMemcpy(A,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
         cout<<"Could not copy d_Anew into A"<<endl;
     }
 
-    cout << std::accumulate(A.begin(), A.end(), 0.0) << " " << A[19*rounded_n + 37] << " "
-        << A[(n/3)* rounded_n + (n/3)] << endl;
+    cout << std::accumulate(A, A + rounded_n*rounded_n, 0.0) << " " << A[19*rounded_n + 37] << " "
+        << A[(n_/3)* rounded_n + (n_/3)] << endl;
 
+    delete[] A;
     cudaFree(d_Anew);
     cudaFree(d_Aold);
     cudaFree(d_sumCheck);

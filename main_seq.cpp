@@ -14,7 +14,7 @@ int main(int argc, char** argv){
             A_new[i][j]=A[i][j];
         }
     }
-    for(int iter=0; iter < 10; ++iter){
+    for(int iter=0; iter < 0; ++iter){
         for(int i=0; i < n; ++i){
             for(int j=0; j<n; ++j){
                 if(i==0 || i == n-1 || j==0 || j== n-1){
