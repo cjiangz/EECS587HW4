@@ -14,4 +14,9 @@
 #module load cuda
 #make sure to compile your program using nvcc
 #nvcc -o example1 example1.cu
-./example1 > ex1output.txt
+echo "n=1000" > output.txt
+./hw4 1000 >> output.txt
+echo "n=2000" >> output.txt
+./hw4 2000 >> output.txt
+echo "n=4000" >> output.txt
+./hw4 4000 >> output.txt

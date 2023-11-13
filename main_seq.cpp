@@ -4,17 +4,21 @@
 #include <iostream>
 #include <algorithm>
 
+using namespace std;
+
 int main(int argc, char** argv){
     int n = atoi(argv[1]);
     std::vector<std::vector<double>> A(n,std::vector<double>(n, 0));
     std::vector<std::vector<double>> A_new(n,std::vector<double>(n, 0));
     for(int i=0; i < n; ++i){
         for(int j=0; j<n; ++j){
-            A[i][j]=sin(i*i+j)*sin(i*i+j)+cos(i-j);
+            A[i][j]= sin(i*i+j)*sin(i*i+j)+cos(i-j);
             A_new[i][j]=A[i][j];
+            //cout << A[i][j] << " ";
         }
+        //cout << endl;
     }
-    for(int iter=0; iter < 0; ++iter){
+    for(int iter=0; iter < 10; ++iter){
         for(int i=0; i < n; ++i){
             for(int j=0; j<n; ++j){
                 if(i==0 || i == n-1 || j==0 || j== n-1){
@@ -25,6 +29,15 @@ int main(int argc, char** argv){
                 A_new[i][j] = vals[2];
             }
         }
+        /*
+        for(int i=0; i < n; ++i){
+            for(int j=0; j<n; ++j){
+                cout << A_new[i][j] << " ";
+            }
+            cout << endl;
+        }
+        cout << endl;
+        */
         A.swap(A_new);
     }
     double sum = 0;
