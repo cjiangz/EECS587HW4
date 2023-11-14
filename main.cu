@@ -1,40 +1,21 @@
-//This is a cuda program that adds one integer
-//It is overkill to use a GPU for this but shows the basics
-//of initializing data on the host, copying it to the device
-//launching a kernel, copying the result back, and freeing 
-//the allocated memory
-
-
 #include <iostream>
 #include <cstdio>      /* printf, fgets */
 #include <cstdlib>     /* atoi */
 #include <cmath>
-#include <vector>
 #include <iomanip>
-#include <limits>
-#include <numeric>
-
 
 using namespace std;
 
 __constant__ int n;
 
 __device__ int getGlobalIdx_2D_2D(){
-    //return (threadIdx.x + blockIdx.x * blockDim.x)* (gridDim.y * blockDim.y) + blockIdx.y * blockDim.y + threadIdx.y;
-    //int num_above = blockIdx.x*gridDim.y*blockDim.y*blockDim.x + threadIdx.x * gridDim.y*blockDim.y;
-    //int left = blockIdx.y*blockDim.y + threadIdx.y;
-    // return num_above + left;
-
     int blockId = blockIdx.y + blockIdx.x * gridDim.y;
     int threadId = blockId * (blockDim.x * blockDim.y)
                    + (threadIdx.x * blockDim.y) + threadIdx.y;
     return threadId;
-
-
 }
 
 __device__ int getGlobalIdx_Above(){
-
     int block_x = blockIdx.x - 1;
     int thread_x = blockDim.x - 1;
     int block_y = blockIdx.y;
@@ -163,18 +144,17 @@ int getGlobalId(int i, int j, int rounded_n){
                    + (x_id * 32) + y_id;
     return globalId;
 }
-//host function, note that the __host__ qualifier is not needed 
-//as it is assumed by default
+
 int main(int argc, char** argv)
 {
-    //initialize host variables
+
     int n_ = atoi(argv[1]);
     cudaMemcpyToSymbol(n,&n_,sizeof(n_));
     int rounded_n = n_;
     if(n_ % 32 != 0){
         rounded_n = 32*(n_/32 + 1);
     }
-    //vector<double> Az(rounded_n * rounded_n,0);
+
     double *A = new double[rounded_n* rounded_n];
     double *A_new = new double[rounded_n*rounded_n];
     double sumCheck;
@@ -185,28 +165,23 @@ int main(int argc, char** argv)
             int globalId = getGlobalId(i, j, rounded_n);
             if(i >= n_ || j >= n_){
                 A[globalId] = 0;
-                //cout << A[i*rounded_n + j] << " ";
                 continue;
             }
             A[globalId] = sin(i*i+j)*sin(i*i+j)+cos(i-j);
-            //cout << A[i*rounded_n + j] << " ";
         }
-        //cout << endl;
     }
 
     dim3 gridDim(rounded_n/32,rounded_n/32,1);
     dim3 blockDim(32,32,1);
 
-    //allocate memory for device variables
+
     double* d_Aold;
     double* d_Anew;
-    //int* d_n;
     double *d_check1;
     double *d_check2;
 
 
-    //we can check if the cuda functions fail by seeing if they return a cudaSuccess code
-    //you get status codes like cudaSuccess for free when you are compiling with nvcc
+
     if(cudaMalloc(&d_Aold,sizeof(double)*rounded_n*rounded_n) != cudaSuccess){
         cout<<"Could not allocate d_A"<<endl;
     }
@@ -219,29 +194,13 @@ int main(int argc, char** argv)
     if(cudaMalloc(&d_check2,sizeof(double)) != cudaSuccess){
         cout<<"Could not allocate d_A"<<endl;
     }
-    /*
-    if(cudaMalloc(&d_n,sizeof(int)) != cudaSuccess){
-        cout<<"Could not allocate d_A"<<endl;
-    }
-    */
 
-    //copy values of A and B to d_a and d_b
-
-    //note that we provided d_a directly but had to provide &a, this is because
-    //cudaMemcpy expects pointers
     if(cudaMemcpy(d_Aold,A,sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
         cout<<"Could not copy A into d_Aold"<<endl;
     }
     if(cudaMemcpy(d_Anew,A,sizeof(double)*rounded_n*rounded_n,cudaMemcpyHostToDevice) != cudaSuccess){
         cout<<"Could not copy A into d_Anew"<<endl;
     }
-    /*
-    cudaError_t error = cudaGetLastError();
-    cout << "here" << endl;
-    cout << cudaGetErrorString(error) << endl;
-    cout << cudaGetErrorName(error) << endl;
-     */
-
 
     float elapsedTime = 0;
     cudaEvent_t start, stop;
@@ -252,83 +211,22 @@ int main(int argc, char** argv)
 
     for(int i = 0; i < 10; ++i){
         swap(d_Aold, d_Anew);
-        /*
-        cout << "start " << i  << endl;
-        error = cudaGetLastError();
-        cout << cudaGetErrorString(error) << endl;
-        cout << cudaGetErrorName(error) << endl;
-         */
         DoIter<<<gridDim,blockDim>>>(d_Aold,d_Anew);
-        //cudaDeviceSynchronize();
-        /*
-        cout << "end " << i  << endl;
-        error = cudaGetLastError();
-        cout << cudaGetErrorString(error) << endl;
-        cout << cudaGetErrorName(error) << endl;
-
-        if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
-            cout<<"Could not copy d_Anew into A_new"<<endl;
-            cudaError_t error = cudaGetLastError();
-            cout << cudaGetErrorString(error) << endl;
-            cout << cudaGetErrorName(error) << endl;
-        }
-        for(int i = 0; i < rounded_n; ++i){
-            for(int j=0;j<rounded_n;++j){
-                cout << A_new[i*rounded_n + j] << " ";
-            }
-            cout << endl;
-        }
-        */
     }
 
     getVerificationValues<<<gridDim,blockDim>>>(d_Anew, d_check1, d_check2);
 
     int N = rounded_n*rounded_n;
-    /*
-    if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
-        cout<<"Could not copy d_Anew into A_new"<<endl;
-        cudaError_t error = cudaGetLastError();
-        cout << cudaGetErrorString(error) << endl;
-        cout << cudaGetErrorName(error) << endl;
-    }
-    for(int i = 0; i < rounded_n; ++i){
-        for(int j=0;j<rounded_n;++j){
-            cout << A_new[i*rounded_n + j] << " ";
-        }
-        cout << endl;
-    }
-    cout << endl << endl;
-    */
     while (N > 1) {
         swap(d_Aold, d_Anew);
         int rounded_N = N;
         if (N % 1024 != 0) {
             rounded_N = 1024 * (N / 1024 + 1);
         }
-        /*
-        if (cudaMemcpy(d_n, &N, sizeof(int), cudaMemcpyHostToDevice) != cudaSuccess) {
-            cout << "Could not copy N into d_n" << endl;
-        }
-         */
         reduce<<<rounded_N / 1024, 1024>>>(d_Aold, d_Anew, N);
-        //cudaDeviceSynchronize();
         N = rounded_N/1024;
-        /*
-        if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
-            cout<<"Could not copy d_Anew into A_new"<<endl;
-            cudaError_t error = cudaGetLastError();
-            cout << cudaGetErrorString(error) << endl;
-            cout << cudaGetErrorName(error) << endl;
-        }
-        for(int i = 0; i < N; ++i){
-            cout << A_new[i] << " ";
-        }
-        cout << endl << endl;
-        N = rounded_N/1024;
-         */
     }
 
-    //cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsedTime, start, stop);
@@ -352,19 +250,12 @@ int main(int argc, char** argv)
     if(cudaMemcpy(&sumCheck, d_Anew, sizeof(double), cudaMemcpyDeviceToHost) != cudaSuccess){
         cout<<"Could not copy d_Anew[0] into sumCheck"<<endl;
     }
-    cout << std::setprecision(std::numeric_limits<double>::max_digits10 - 1) << "Sum: " << sumCheck <<  ",  A[n/3][n/3]:" << check1  << ", A[19][37]:" << check2 << ", Elapsed Time: " << elapsedTime << endl;
-     /*
-    sumCheck = std::accumulate(A_new, A_new + rounded_n*rounded_n, 0.0);
-    check1 = A_new[(n_/3)*rounded_n + (n_/3)];
-    check2 = A_new[19*rounded_n + 37];
+    cout << std::setprecision(10) << "Sum: " << sumCheck <<  ",  A[n/3][n/3]:" << check1  << ", A[19][37]:" << check2 << ", Elapsed Time: " << elapsedTime << endl;
 
-    cout << "Sum: " << sumCheck <<  ",  A[n/3][n/3]:" << check1  << ", A[19][37]:" << check2 << ", Elapsed Time: " << elapsedTime << endl;
-    */
     delete[] A;
     delete[] A_new;
     cudaFree(d_Anew);
     cudaFree(d_Aold);
-    //cudaFree(d_n);
     cudaFree(d_check1);
     cudaFree(d_check2);
 
