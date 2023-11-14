@@ -65,21 +65,21 @@ __global__ void getVerificationValues(double* A, double* check1, double* check2)
 }
 
 __global__ void reduce(double* A_old, double* A_new, int N) {
-    __shared__ double sdata[1024];
+    __shared__ double block[1024];
 
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x*blockDim.x + threadIdx.x;
-    sdata[tid] = i >= N ? 0 : A_old[i];
+    unsigned int myLocalId = threadIdx.x;
+    unsigned int i = blockIdx.x*blockDim.x + myLocalId;
+    block[myLocalId] = i >= N ? 0 : A_old[i];
     __syncthreads();
 
-    for (unsigned int s=512; s>0; s>>=1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
+    for (unsigned int numElements=1024; numElements > 1; numElements /= 2) {
+        if (myLocalId < numElements/2) {
+            block[myLocalId] += block[myLocalId + numElements/2];
         }
         __syncthreads();
     }
 
-    if (tid == 0) A_new[blockIdx.x] = sdata[0];
+    if (myLocalId == 0) A_new[blockIdx.x] = block[0];
 }
 
 int main(int argc, char** argv)
