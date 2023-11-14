@@ -3,6 +3,8 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <numeric>
+#include <iomanip>
 
 using namespace std;
 
@@ -42,9 +44,11 @@ int main(int argc, char** argv){
     }
     double sum = 0;
     for(int i = 0; i < n; ++i){
+        double temp_sum = 0;
         for(int j = 0; j < n; ++j){
-            sum+=A[i][j];
+            temp_sum += A[i][j];
         }
+        sum += temp_sum;
     }
-    std::cout << sum << " " << A[n/3][n/3] << " " << A[19][37] << std::endl;
+    std::cout << std::setprecision(std::numeric_limits<double>::max_digits10 - 1) << sum << " " << A[n/3][n/3] << " " << A[19][37] << std::endl;
 }

@@ -20,17 +20,66 @@ using namespace std;
 __constant__ int n;
 
 __device__ int getGlobalIdx_2D_2D(){
-    return (threadIdx.x + blockIdx.x * blockDim.x)* (gridDim.y * blockDim.y) + blockIdx.y * blockDim.y + threadIdx.y;
+    //return (threadIdx.x + blockIdx.x * blockDim.x)* (gridDim.y * blockDim.y) + blockIdx.y * blockDim.y + threadIdx.y;
     //int num_above = blockIdx.x*gridDim.y*blockDim.y*blockDim.x + threadIdx.x * gridDim.y*blockDim.y;
     //int left = blockIdx.y*blockDim.y + threadIdx.y;
     // return num_above + left;
-    /*
+
     int blockId = blockIdx.y + blockIdx.x * gridDim.y;
     int threadId = blockId * (blockDim.x * blockDim.y)
                    + (threadIdx.x * blockDim.y) + threadIdx.y;
     return threadId;
-     */
-    //
+
+
+}
+
+__device__ int getGlobalIdx_Above(){
+
+    int block_x = blockIdx.x - 1;
+    int thread_x = blockDim.x - 1;
+    int block_y = blockIdx.y;
+    int thread_y = threadIdx.y;
+    int blockId = block_y + block_x * gridDim.y;
+    int threadId = blockId * (blockDim.x * blockDim.y)
+                   + (thread_x * blockDim.y) + thread_y;
+    return threadId;
+}
+
+__device__ int getGlobalIdx_Right(){
+
+    int block_x = blockIdx.x;
+    int thread_x = threadIdx.x;
+    int block_y = blockIdx.y + 1;
+    int thread_y = 0;
+    int blockId = block_y + block_x * gridDim.y;
+    int threadId = blockId * (blockDim.x * blockDim.y)
+                   + (thread_x * blockDim.y) + thread_y;
+    return threadId;
+}
+
+__device__ int getGlobalIdx_Below(){
+    int blockId = blockIdx.y + (blockIdx.x + 1) * gridDim.y;
+    int threadId = blockId * (blockDim.x * blockDim.y)
+                   + (0 * blockDim.y) + threadIdx.y;
+    return threadId;
+}
+
+__device__ int getGlobalIdx_Left(){
+    int blockId = (blockIdx.y - 1) + blockIdx.x * gridDim.y;
+    int threadId = blockId * (blockDim.x * blockDim.y)
+                   + (threadIdx.x * blockDim.y) + (blockDim.y - 1);
+    return threadId;
+}
+
+__device__ int getGlobalId(int i, int j){
+    int x = i/blockDim.x;
+    int x_id = i%blockDim.x;
+    int y = j/blockDim.y;
+    int y_id = j%blockDim.y;
+    int blockId = y + x * gridDim.x;
+    int globalId = blockId * (blockDim.x * blockDim.y)
+                   + (x_id * blockDim.x) + y_id;
+    return globalId;
 }
 
 __device__ int getLocalIdx_2D(){
@@ -54,10 +103,10 @@ __global__ void DoIter(double* A_old, double* A_new)
     double temp = block[myLocalId];
     __syncthreads();
     if(!is_boundary){
-        double above = threadIdx.x == 0 ? A_old[myGlobalId - gridDim.y * blockDim.y] : block[myLocalId - blockDim.y]; //high probability
-        double below = threadIdx.x == blockDim.x - 1 ? A_old[myGlobalId + gridDim.y * blockDim.y] : block[myLocalId + blockDim.y];
-        double left = threadIdx.y == 0 ? A_old[myGlobalId - 1] : block[myLocalId - 1];
-        double right = threadIdx.y == blockDim.y - 1 ? A_old[myGlobalId + 1] : block[myLocalId + 1];
+        double above = threadIdx.x == 0 ? A_old[getGlobalIdx_Above()] : block[myLocalId - blockDim.y]; //high probability
+        double below = threadIdx.x == blockDim.x - 1 ? A_old[getGlobalIdx_Below()] : block[myLocalId + blockDim.y];
+        double left = threadIdx.y == 0 ? A_old[getGlobalIdx_Left()] : block[myLocalId - 1];
+        double right = threadIdx.y == blockDim.y - 1 ? A_old[getGlobalIdx_Right()] : block[myLocalId + 1];
         double array[5] = {above,below,left,right,temp};
         // insertion sort
         for(int i=1;i < 5;++i){
@@ -75,8 +124,8 @@ __global__ void DoIter(double* A_old, double* A_new)
 
 __global__ void getVerificationValues(double* A, double* check1, double* check2){
     int myGlobalId = getGlobalIdx_2D_2D();
-    int n_over_3_id = n/3 * gridDim.y * blockDim.y + n/3;
-    int nineteen_thirtyseven_id = 19 * gridDim.y * blockDim.y + 37;
+    int n_over_3_id = getGlobalId(n/3,n/3);
+    int nineteen_thirtyseven_id = getGlobalId(19,37);
     if(myGlobalId == n_over_3_id){
         *check1 = A[myGlobalId];
     }
@@ -104,7 +153,16 @@ __global__ void reduce(double* A_old, double* A_new, int N) {
 }
 
 
-
+int getGlobalId(int i, int j, int rounded_n){
+    int x = i/32;
+    int x_id = i%32;
+    int y = j/32;
+    int y_id = j%32;
+    int blockId = y + x * rounded_n/32;
+    int globalId = blockId * (32 * 32)
+                   + (x_id * 32) + y_id;
+    return globalId;
+}
 //host function, note that the __host__ qualifier is not needed 
 //as it is assumed by default
 int main(int argc, char** argv)
@@ -117,19 +175,20 @@ int main(int argc, char** argv)
         rounded_n = 32*(n_/32 + 1);
     }
     //vector<double> Az(rounded_n * rounded_n,0);
-    double *A = new double[rounded_n*rounded_n];
+    double *A = new double[rounded_n* rounded_n];
     double *A_new = new double[rounded_n*rounded_n];
     double sumCheck;
     double check1;
     double check2;
     for(int i = 0; i < rounded_n; ++i){
-        for(int j=0;j<rounded_n;++j){
+        for(int j=0;j< rounded_n;++j){
+            int globalId = getGlobalId(i, j, rounded_n);
             if(i >= n_ || j >= n_){
-                A[i*rounded_n + j] = 0;
+                A[globalId] = 0;
                 //cout << A[i*rounded_n + j] << " ";
                 continue;
             }
-            A[i*rounded_n + j] = sin(i*i+j)*sin(i*i+j)+cos(i-j);
+            A[globalId] = sin(i*i+j)*sin(i*i+j)+cos(i-j);
             //cout << A[i*rounded_n + j] << " ";
         }
         //cout << endl;
@@ -183,12 +242,14 @@ int main(int argc, char** argv)
     cout << cudaGetErrorName(error) << endl;
      */
 
+
     float elapsedTime = 0;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
+
     for(int i = 0; i < 10; ++i){
         swap(d_Aold, d_Anew);
         /*
@@ -221,6 +282,7 @@ int main(int argc, char** argv)
     }
 
     getVerificationValues<<<gridDim,blockDim>>>(d_Anew, d_check1, d_check2);
+
     int N = rounded_n*rounded_n;
     /*
     if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
@@ -249,7 +311,7 @@ int main(int argc, char** argv)
         }
          */
         reduce<<<rounded_N / 1024, 1024>>>(d_Aold, d_Anew, N);
-        cudaDeviceSynchronize();
+        //cudaDeviceSynchronize();
         N = rounded_N/1024;
         /*
         if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
@@ -266,30 +328,13 @@ int main(int argc, char** argv)
          */
     }
 
-    cudaDeviceSynchronize();
-
+    //cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsedTime, start, stop);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
 
-    /*
-    error = cudaGetLastError();
-    cout << "bruh" << endl;
-    cout << cudaGetErrorString(error) << endl;
-    cout << cudaGetErrorName(error) << endl;
-    */
-    
-    //AddNum<<<1,1>>>(d_a,d_b,d_c);
-    
-    //cudaMemcpy blocks until the kernel is finished and the data is copied, acting as a barrier
-    //for our cout that prints the results, we could also call cudaDeviceSynchronize() above to
-    //make the cpu wait until all kernels have finished
-    //if we had any code above this cudaMemcpy call it would occur concurrently with the kernel
-    //because the CPU can continue executing after the kernel is launched. This behavior could be
-    //prevented by using a call to cudaDeviceSynchronize()
-    //note that destination is first in the cudaMemcpy call
 
     if(cudaMemcpy(A_new,d_Anew,sizeof(double)*rounded_n*rounded_n,cudaMemcpyDeviceToHost) != cudaSuccess){
         cout<<"Could not copy d_Anew into A_new"<<endl;
