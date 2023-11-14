@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <iomanip>
+#include <chrono>
 
 using namespace std;
 
@@ -20,6 +21,7 @@ int main(int argc, char** argv){
         }
         //cout << endl;
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
     for(int iter=0; iter < 10; ++iter){
         for(int i=0; i < n; ++i){
             for(int j=0; j<n; ++j){
@@ -50,5 +52,9 @@ int main(int argc, char** argv){
         }
         sum += temp_sum;
     }
+    auto t2 = std::chrono::high_resolution_clock::now();
+    std::cout << "f() took "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+              << " milliseconds\n";
     std::cout << std::setprecision(std::numeric_limits<double>::max_digits10 - 1) << sum << " " << A[n/3][n/3] << " " << A[19][37] << std::endl;
 }

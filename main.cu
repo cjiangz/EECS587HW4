@@ -3,6 +3,10 @@
 #include <cstdlib>     /* atoi */
 #include <cmath>
 #include <iomanip>
+#include <thrust/sort.h>
+#include <thrust/functional.h>
+#include <thrust/execution_policy.h>
+#include <thrust/device_ptr.h>
 
 using namespace std;
 
@@ -74,6 +78,7 @@ __device__ bool isBoundary(){
     || (blockIdx.y * blockDim.y + threadIdx.y >= n - 1);
 }
 
+
 __global__ void DoIter(double* A_old, double* A_new)
 {
     __shared__ double block[1024];
@@ -83,6 +88,7 @@ __global__ void DoIter(double* A_old, double* A_new)
     block[myLocalId] = A_old[myGlobalId];
     double temp = block[myLocalId];
     __syncthreads();
+
     if(!is_boundary){
         double above = threadIdx.x == 0 ? A_old[getGlobalIdx_Above()] : block[myLocalId - blockDim.y]; //high probability
         double below = threadIdx.x == blockDim.x - 1 ? A_old[getGlobalIdx_Below()] : block[myLocalId + blockDim.y];
@@ -90,6 +96,7 @@ __global__ void DoIter(double* A_old, double* A_new)
         double right = threadIdx.y == blockDim.y - 1 ? A_old[getGlobalIdx_Right()] : block[myLocalId + 1];
         double array[5] = {above,below,left,right,temp};
         // insertion sort
+        /*
         for(int i=1;i < 5;++i){
             double tmp = array[i];
             int j = i - 1;
@@ -98,8 +105,20 @@ __global__ void DoIter(double* A_old, double* A_new)
             }
             array[j+1] = tmp;
         }
+         */
+        for(int i=0;i < 3;++i){
+            int min_idx = i;
+            for(int j = i;j < 5; ++j){
+                min_idx = array[min_idx] > array[j] ? j : min_idx;
+            }
+            double tmp = array[i];
+            array[i] = array[min_idx];
+            array[min_idx] = tmp;
+        }
         temp = array[2];
     }
+
+
     A_new[myGlobalId] = temp;
 }
 
